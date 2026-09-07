@@ -1,0 +1,6 @@
+# 統一以 LF 存進 repo。Windows 的 CRLF 若混進 workflow 的 shell script，
+# 在 Linux runner 上會因為行尾的 \r 而失敗，而且錯誤訊息完全看不出原因。
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

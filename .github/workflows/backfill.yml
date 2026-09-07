@@ -1,0 +1,37 @@
+name: backfill-details
+
+# 手動觸發。首次上線時把一萬多筆職缺的詳情頁補齊；
+# 跑不完會自己停下，重跑一次即可接續。
+on:
+  workflow_dispatch:
+    inputs:
+      max_minutes:
+        description: '時間預算（分鐘），Actions 單次上限 360'
+        required: false
+        default: '300'
+
+concurrency:
+  group: scrape-104        # 與每日流程互斥，避免同時打 104
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Backfill job details
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m scraper.backfill --max-minutes ${{ inputs.max_minutes }}

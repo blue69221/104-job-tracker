@@ -1,0 +1,50 @@
+name: daily-104
+
+on:
+  schedule:
+    # UTC 01:00 = 台北時間 09:00。GitHub 的排程在尖峰時可能延遲十幾分鐘，
+    # 對每天跑一次的爬蟲沒有影響。
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: scrape-104
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write        # heartbeat commit 需要
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Run daily scrape
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python -m scraper.run_daily --web-url "${{ vars.WEB_URL }}"
+
+      # GitHub 會在 repo 連續 60 天沒有 commit 之後自動停用排程，
+      # 而爬蟲只寫 Supabase 不寫 repo，正好會踩到這個陷阱。
+      # 每天推一次 heartbeat 讓排程活著。
+      - name: Heartbeat commit
+        if: always()
+        run: |
+          mkdir -p state
+          date -u +"%Y-%m-%dT%H:%M:%SZ  job=${{ job.status }}" > state/heartbeat.txt
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/heartbeat.txt
+          git diff --staged --quiet || git commit -m "chore: heartbeat"
+          git push

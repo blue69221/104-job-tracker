@@ -1,0 +1,19 @@
+name: probe-104
+
+# 手動觸發。用途：確認 GitHub Actions 的機房 IP 能不能存取 104。
+# 這是往下蓋之前的 gate，跑不過就得把爬蟲移回家用 IP。
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Probe 104 connectivity
+        run: python -m scraper.probe
