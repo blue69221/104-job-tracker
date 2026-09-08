@@ -20,6 +20,7 @@ logging.getLogger("hpack").setLevel(logging.WARNING)
 from .client import Client, BlockedError, FetchError   # noqa: E402
 from .parse import parse_detail                        # noqa: E402
 from .store import Store                               # noqa: E402
+from . import config as C                              # noqa: E402
 from . import notify                                   # noqa: E402
 from datetime import date                              # noqa: E402
 
@@ -31,10 +32,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--max-minutes", type=float, default=300.0,
                     help="時間預算，留餘裕給 Actions 的 6 小時上限")
-    ap.add_argument("--max-jobs", type=int, default=0, help="0 表示不限筆數")
+    ap.add_argument("--max-jobs", type=int, default=C.BACKFILL_MAX_JOBS,
+                    help="單次上限筆數（0 = 不限）。連續請求越久越容易觸發 429，"
+                         "分多次跑比一次跑完安全")
     args = ap.parse_args()
 
-    client = Client()
+    # 詳情頁用較慢的間隔：實測 1.2 秒連抓 2,500 筆就會被限流
+    client = Client(delay=C.DETAIL_DELAY)
     store = Store()
     deadline = time.time() + args.max_minutes * 60
     done = failed = 0
@@ -77,8 +81,8 @@ def main():
                     log.info("已補 %s 筆 / 失敗 %s / 剩餘時間 %.0f 分鐘",
                              done, failed, (deadline - time.time()) / 60)
 
-        log.info("回填結束：成功 %s / 失敗 %s / 請求 %s",
-                 done, failed, client.request_count)
+        log.info("回填結束：成功 %s / 失敗 %s / 請求 %s / 遇到限流 %s 次",
+                 done, failed, client.request_count, client.rate_limit_hits)
         return 0
 
     except BlockedError as e:

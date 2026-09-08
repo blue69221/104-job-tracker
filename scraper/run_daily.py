@@ -25,6 +25,7 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("hpack").setLevel(logging.WARNING)
 
 from . import notify                                    # noqa: E402
+from . import config as C                               # noqa: E402
 from .client import Client, BlockedError, FetchError    # noqa: E402
 from .diff import classify, assert_uniform_columns      # noqa: E402
 from .planner import build_plan, plan_summary           # noqa: E402
@@ -63,7 +64,19 @@ def scan_lists(client, queries):
 
 
 def fetch_details(client, store, targets):
-    """抓詳情頁。列表沒有薪資字串、經驗、學歷、技能、福利，只有這裡有。"""
+    """抓詳情頁。列表沒有薪資字串、經驗、學歷、技能、福利，只有這裡有。
+
+    詳情頁的速率容忍度比列表低，這裡把間隔調慢，結束後還原。
+    """
+    done = 0
+    prev_delay, client.delay = client.delay, C.DETAIL_DELAY
+    try:
+        return _fetch_details(client, store, targets)
+    finally:
+        client.delay = prev_delay
+
+
+def _fetch_details(client, store, targets):
     done = 0
     for row in targets:
         enc_id = row.get("enc_id")

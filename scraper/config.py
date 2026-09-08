@@ -40,9 +40,20 @@ JOBCAT_GROUPS = [
 ]
 
 # --- 禮貌性節流 ---
+# 實測（2026-09-08）：列表 1,370 頁 + 400 筆詳情共 1,770 次請求可以通過；
+# 但以 1.2 秒間隔連續抓 2,500 筆詳情（約 48 分鐘）就會收到 HTTP 429。
+# 詳情頁的容忍度明顯比列表低，所以獨立設定較慢的間隔。
 DELAY = float(os.getenv("SCRAPE_DELAY", "1.2"))
+DETAIL_DELAY = float(os.getenv("SCRAPE_DETAIL_DELAY", "2.0"))
 TIMEOUT = int(os.getenv("SCRAPE_TIMEOUT", "30"))
 MAX_RETRIES = int(os.getenv("SCRAPE_MAX_RETRIES", "3"))
+
+# 429 是暫時性限流，不是封鎖。等待後重試通常能繼續，
+# 直接中止會讓回填永遠補不完。403 才視為真正被擋。
+RATE_LIMIT_BACKOFF = [int(x) for x in
+                      os.getenv("RATE_LIMIT_BACKOFF", "60,180,420").split(",")]
+# 單次回填的筆數上限。連續請求越久越容易觸線，分多次跑比一次跑完安全。
+BACKFILL_MAX_JOBS = int(os.getenv("BACKFILL_MAX_JOBS", "1500"))
 
 # --- 業務規則 ---
 RELIST_WINDOW_DAYS = 60   # 重刊摺疊的回溯窗（第 8 題）
