@@ -6,6 +6,15 @@ on:
     # 對每天跑一次的爬蟲沒有影響。
     - cron: '0 1 * * *'
   workflow_dispatch:
+    inputs:
+      limit_queries:
+        description: '只跑前 N 個查詢（0 = 全部）。首次設定時填 2 可快速驗證 Secrets，該模式不判定下架。'
+        required: false
+        default: '0'
+      detail_budget:
+        description: '本次最多抓幾筆詳情頁'
+        required: false
+        default: '400'
 
 concurrency:
   group: scrape-104
@@ -33,7 +42,11 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python -m scraper.run_daily --web-url "${{ vars.WEB_URL }}"
+        run: |
+          python -m scraper.run_daily \
+            --web-url "${{ vars.WEB_URL }}" \
+            --limit-queries "${{ inputs.limit_queries || 0 }}" \
+            --detail-budget "${{ inputs.detail_budget || 400 }}"
 
       # GitHub 會在 repo 連續 60 天沒有 commit 之後自動停用排程，
       # 而爬蟲只寫 Supabase 不寫 repo，正好會踩到這個陷阱。
