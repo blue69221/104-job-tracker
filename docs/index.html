@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>新竹硬體職缺</title>
+<style>
+:root {
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f0f0f2;
+  --border: #e2e2e6;
+  --text: #16181d;
+  --text-dim: #64676f;
+  --text-faint: #9296a0;
+  --accent: #2c6fdb;
+  --accent-soft: #e8f0fd;
+  --good: #1a7f5a;
+  --good-soft: #e3f4ec;
+  --warn: #a8620a;
+  --warn-soft: #fdf0dd;
+  --danger: #b0342c;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --surface: #171a20;
+    --surface-2: #1e222a;
+    --border: #2a2f39;
+    --text: #e6e8ec;
+    --text-dim: #9aa0ac;
+    --text-faint: #6b7280;
+    --accent: #5b9bff;
+    --accent-soft: #16273f;
+    --good: #4ade80;
+    --good-soft: #12281d;
+    --warn: #fbbf24;
+    --warn-soft: #2c2109;
+    --danger: #f87171;
+    --shadow: 0 1px 2px rgba(0,0,0,.3);
+  }
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+        "PingFang TC", "Microsoft JhengHei", sans-serif;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+input, select { font: inherit; color: inherit; }
+
+/* ---------- 登入 ---------- */
+#login {
+  min-height: 100dvh; display: grid; place-items: center; padding: 24px;
+}
+#login form {
+  width: 100%; max-width: 340px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px 22px; box-shadow: var(--shadow);
+}
+#login h1 { margin: 0 0 4px; font-size: 19px; }
+#login p.sub { margin: 0 0 22px; color: var(--text-dim); font-size: 13px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 5px; }
+.field input {
+  width: 100%; padding: 11px 12px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.field input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.btn-primary {
+  width: 100%; padding: 12px; border-radius: 9px; margin-top: 8px;
+  background: var(--accent); color: #fff; font-weight: 600;
+}
+.btn-primary:disabled { opacity: .55; }
+.msg { margin-top: 12px; font-size: 13px; color: var(--danger); min-height: 18px; }
+
+/* ---------- 版面 ---------- */
+header {
+  position: sticky; top: 0; z-index: 20; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: calc(10px + env(safe-area-inset-top)) 14px 0;
+}
+.title-row { display: flex; align-items: center; gap: 10px; }
+.title-row h1 { margin: 0; font-size: 16px; font-weight: 650; flex: 1; }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center;
+  color: var(--text-dim); font-size: 15px;
+}
+.icon-btn:hover { background: var(--surface-2); }
+.stats { font-size: 12px; color: var(--text-dim); margin: 6px 0 0; }
+.tabs { display: flex; gap: 4px; margin-top: 10px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  padding: 8px 13px; border-radius: 8px 8px 0 0; font-size: 13.5px; white-space: nowrap;
+  color: var(--text-dim); border-bottom: 2px solid transparent;
+}
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab .n { font-size: 11px; opacity: .75; margin-left: 3px; }
+
+.filters { padding: 10px 14px; display: flex; gap: 7px; flex-wrap: wrap; }
+.filters input[type=search] {
+  flex: 1 1 100%; min-width: 0; padding: 9px 12px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--surface);
+}
+.filters select {
+  flex: 1; min-width: 0; padding: 8px 9px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); font-size: 13px;
+}
+
+main { padding: 0 14px 40px; }
+
+/* ---------- 職缺卡 ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 13px 14px; margin-bottom: 9px;
+  box-shadow: var(--shadow);
+}
+.card.marked-applied { border-left: 3px solid var(--good); }
+.card.marked-interested { border-left: 3px solid var(--accent); }
+.card h2 {
+  margin: 0 0 3px; font-size: 15px; font-weight: 620; line-height: 1.4;
+}
+.card .co { color: var(--text-dim); font-size: 13px; margin-bottom: 7px; }
+.meta { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.chip {
+  font-size: 11.5px; padding: 2.5px 7px; border-radius: 5px;
+  background: var(--surface-2); color: var(--text-dim);
+}
+.chip.salary { background: var(--good-soft); color: var(--good); font-weight: 600; }
+.chip.hot { background: var(--warn-soft); color: var(--warn); }
+.chip.new { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.actions { display: flex; gap: 6px; }
+.act {
+  flex: 1; padding: 8px 4px; border-radius: 8px; font-size: 12.5px;
+  background: var(--surface-2); color: var(--text-dim); text-align: center;
+}
+.act.on { background: var(--accent); color: #fff; font-weight: 600; }
+.act.on.good { background: var(--good); }
+.act.danger { color: var(--danger); }
+
+.detail {
+  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--border);
+  font-size: 13.5px; color: var(--text-dim); white-space: pre-wrap;
+  word-break: break-word;
+}
+.detail h3 {
+  font-size: 12px; color: var(--text-faint); margin: 13px 0 5px;
+  text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+}
+.detail h3:first-child { margin-top: 0; }
+.detail a { color: var(--accent); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 4px; white-space: normal; }
+
+.empty, .loading { text-align: center; color: var(--text-faint); padding: 48px 20px; font-size: 14px; }
+.more {
+  width: 100%; padding: 13px; border-radius: var(--radius); margin-top: 4px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--accent);
+  font-weight: 600;
+}
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  background: var(--text); color: var(--bg); padding: 9px 16px;
+  border-radius: 20px; font-size: 13px; z-index: 60; box-shadow: var(--shadow);
+}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <form id="login-form">
+    <h1>新竹硬體職缺</h1>
+    <p class="sub">請以 Supabase 帳號登入</p>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">密碼</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn-primary" type="submit">登入</button>
+    <div class="msg" id="login-msg"></div>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <header>
+    <div class="title-row">
+      <h1>新竹硬體職缺</h1>
+      <button class="icon-btn" id="refresh" title="重新整理">↻</button>
+      <button class="icon-btn" id="logout" title="登出">⏻</button>
+    </div>
+    <p class="stats" id="stats"></p>
+    <nav class="tabs" id="tabs">
+      <button class="tab on" data-tab="new">今天新增<span class="n" id="n-new"></span></button>
+      <button class="tab" data-tab="week">本週新增<span class="n" id="n-week"></span></button>
+      <button class="tab" data-tab="interested">有興趣<span class="n" id="n-interested"></span></button>
+      <button class="tab" data-tab="applied">已投遞<span class="n" id="n-applied"></span></button>
+      <button class="tab" data-tab="all">全部在架</button>
+    </nav>
+  </header>
+
+  <div class="filters">
+    <input type="search" id="q" placeholder="搜尋職稱或公司…" autocomplete="off">
+    <select id="area">
+      <option value="">全部地區</option>
+      <option value="新竹市">新竹市</option>
+      <option value="竹北">竹北市</option>
+      <option value="湖口">湖口鄉</option>
+      <option value="竹東">竹東鎮</option>
+      <option value="寶山">寶山鄉</option>
+      <option value="新豐">新豐鄉</option>
+    </select>
+    <select id="exp">
+      <option value="">不限經驗</option>
+      <option value="不拘">經驗不拘</option>
+      <option value="1年">1 年以上</option>
+      <option value="2年">2 年以上</option>
+      <option value="3年">3 年以上</option>
+      <option value="5年">5 年以上</option>
+    </select>
+    <select id="sort">
+      <option value="first_seen">最新發現</option>
+      <option value="apply_cnt">應徵人數少</option>
+      <option value="salary_max">薪資高</option>
+      <option value="days_tracked">掛最久</option>
+    </select>
+  </div>
+
+  <main id="list"></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+// anon key 是公開金鑰，出現在前端原始碼是設計如此。
+// 資料的保護來自 RLS：未登入者對任何一張表都沒有 policy，一列都讀不到。
+const SUPABASE_URL = "https://khrvjfodjkbhemfuqtas.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_2cyJTChid4LCxjKmy-ZqVQ_uz6En_1g";
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const PAGE = 25;
+
+const $ = s => document.querySelector(s);
+const state = { tab: "new", offset: 0, done: false, loading: false, open: new Set() };
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function toast(text) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2000);
+}
+
+function todayISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+}
+function daysAgoISO(n) {
+  const d = new Date(Date.now() - n * 864e5);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 10);
+}
+
+/* ---------------- 登入 ---------------- */
+$("#login-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const btn = e.target.querySelector("button");
+  btn.disabled = true;
+  $("#login-msg").textContent = "";
+  const { error } = await sb.auth.signInWithPassword({
+    email: $("#email").value.trim(), password: $("#password").value,
+  });
+  btn.disabled = false;
+  if (error) { $("#login-msg").textContent = error.message; return; }
+  showApp();
+});
+
+$("#logout").addEventListener("click", async () => {
+  await sb.auth.signOut();
+  location.reload();
+});
+
+async function showApp() {
+  $("#login").hidden = true;
+  $("#app").hidden = false;
+  await Promise.all([loadStats(), reload()]);
+}
+
+/* ---------------- 查詢 ---------------- */
+function buildQuery() {
+  let q = sb.from("v_job_list").select("*").eq("is_open", true);
+
+  if (state.tab === "new") {
+    q = q.eq("first_seen", todayISO()).is("canonical_job_no", null);
+  } else if (state.tab === "week") {
+    q = q.gte("first_seen", daysAgoISO(7)).is("canonical_job_no", null);
+  } else if (state.tab === "interested") {
+    q = q.eq("mark_status", "interested");
+  } else if (state.tab === "applied") {
+    q = q.eq("mark_status", "applied");
+  }
+
+  // 已封鎖的公司與手動隱藏的職缺不出現在瀏覽清單，
+  // 但「有興趣 / 已投遞」是你主動標記的，不套用這個過濾。
+  if (state.tab !== "interested" && state.tab !== "applied") {
+    q = q.eq("company_blocked", false)
+         .or("mark_status.is.null,mark_status.neq.hidden");
+  }
+
+  const kw = $("#q").value.trim();
+  if (kw) {
+    const safe = kw.replace(/[%,()]/g, " ");
+    q = q.or(`job_name.ilike.%${safe}%,cust_name.ilike.%${safe}%`);
+  }
+  const area = $("#area").value;
+  if (area) q = q.ilike("job_addr_desc", `%${area}%`);
+  const exp = $("#exp").value;
+  if (exp) q = q.ilike("work_exp", `%${exp}%`);
+
+  const sort = $("#sort").value;
+  if (sort === "apply_cnt") q = q.order("apply_cnt", { ascending: true, nullsFirst: false });
+  else if (sort === "salary_max") q = q.order("salary_max", { ascending: false, nullsFirst: false });
+  else if (sort === "days_tracked") q = q.order("first_seen", { ascending: true });
+  else q = q.order("first_seen", { ascending: false }).order("apply_cnt", { ascending: true });
+
+  return q.range(state.offset, state.offset + PAGE - 1);
+}
+
+async function reload() {
+  state.offset = 0; state.done = false;
+  $("#list").innerHTML = '<p class="loading">載入中…</p>';
+  await loadMore(true);
+}
+
+async function loadMore(reset = false) {
+  if (state.loading || (state.done && !reset)) return;
+  state.loading = true;
+  const { data, error } = await buildQuery();
+  state.loading = false;
+
+  if (reset) $("#list").innerHTML = "";
+  document.querySelector(".more")?.remove();
+
+  if (error) {
+    $("#list").innerHTML = `<p class="empty">讀取失敗：${esc(error.message)}</p>`;
+    return;
+  }
+  if (!data.length && reset) {
+    $("#list").innerHTML = '<p class="empty">這裡沒有職缺</p>';
+    return;
+  }
+  $("#list").insertAdjacentHTML("beforeend", data.map(cardHTML).join(""));
+  state.offset += data.length;
+  if (data.length < PAGE) { state.done = true; return; }
+
+  const btn = document.createElement("button");
+  btn.className = "more";
+  btn.textContent = "載入更多";
+  btn.onclick = () => loadMore();
+  $("#list").appendChild(btn);
+}
+
+/* ---------------- 卡片 ---------------- */
+function cardHTML(j) {
+  const chips = [];
+  if (j.first_seen === todayISO() && !j.canonical_job_no) chips.push('<span class="chip new">今天新增</span>');
+  if (j.job_addr_desc) chips.push(`<span class="chip">${esc(j.job_addr_desc)}</span>`);
+  if (j.salary_text) {
+    const negotiable = /面議/.test(j.salary_text);
+    chips.push(`<span class="chip ${negotiable ? "" : "salary"}">${esc(j.salary_text)}</span>`);
+  } else if (!j.has_detail) {
+    chips.push('<span class="chip">薪資待補</span>');
+  }
+  if (j.work_exp) chips.push(`<span class="chip">${esc(j.work_exp)}</span>`);
+  if (j.edu) chips.push(`<span class="chip">${esc(j.edu)}</span>`);
+  if (j.apply_cnt != null) {
+    const hot = j.apply_cnt >= 30;
+    chips.push(`<span class="chip ${hot ? "hot" : ""}">${j.apply_cnt} 人應徵</span>`);
+  }
+  if (j.days_tracked > 30) chips.push(`<span class="chip">追蹤 ${j.days_tracked} 天</span>`);
+
+  const mark = j.mark_status;
+  return `
+<article class="card ${mark ? "marked-" + mark : ""}" data-job="${esc(j.job_no)}" data-cust="${esc(j.cust_no)}">
+  <h2>${esc(j.job_name)}</h2>
+  <div class="co">${esc(j.cust_name)}${j.co_industry_desc ? " · " + esc(j.co_industry_desc) : ""}</div>
+  <div class="meta">${chips.join("")}</div>
+  <div class="actions">
+    <button class="act ${mark === "interested" ? "on" : ""}" data-act="interested">${mark === "interested" ? "★ 有興趣" : "☆ 有興趣"}</button>
+    <button class="act ${mark === "applied" ? "on good" : ""}" data-act="applied">${mark === "applied" ? "✓ 已投遞" : "已投遞"}</button>
+    <button class="act" data-act="detail">內容</button>
+    <button class="act danger" data-act="block">封鎖</button>
+  </div>
+  <div class="detail" hidden></div>
+</article>`;
+}
+
+/* ---------------- 互動 ---------------- */
+$("#list").addEventListener("click", async e => {
+  const btn = e.target.closest(".act");
+  if (!btn) return;
+  const card = btn.closest(".card");
+  const jobNo = card.dataset.job;
+  const act = btn.dataset.act;
+
+  if (act === "detail") return toggleDetail(card, jobNo, btn);
+  if (act === "block")  return blockCompany(card);
+
+  // 有興趣 / 已投遞：再按一次取消
+  const currentlyOn = btn.classList.contains("on");
+  const status = currentlyOn ? null : act;
+  const { error } = status
+    ? await sb.from("marks").upsert({ job_no: jobNo, status, updated_at: new Date().toISOString() })
+    : await sb.from("marks").delete().eq("job_no", jobNo);
+
+  if (error) return toast("儲存失敗：" + error.message);
+
+  card.querySelectorAll(".act[data-act='interested'],.act[data-act='applied']")
+      .forEach(b => b.classList.remove("on", "good"));
+  card.className = "card";
+  if (status) {
+    btn.classList.add("on");
+    if (status === "applied") btn.classList.add("good");
+    card.classList.add("marked-" + status);
+  }
+  card.querySelector("[data-act='interested']").textContent =
+    status === "interested" ? "★ 有興趣" : "☆ 有興趣";
+  card.querySelector("[data-act='applied']").textContent =
+    status === "applied" ? "✓ 已投遞" : "已投遞";
+  toast(status ? (status === "applied" ? "已標記投遞" : "已加入有興趣") : "已取消標記");
+  loadStats();
+});
+
+async function toggleDetail(card, jobNo, btn) {
+  const box = card.querySelector(".detail");
+  if (!box.hidden) { box.hidden = true; btn.textContent = "內容"; return; }
+  btn.textContent = "收合";
+  box.hidden = false;
+  if (box.dataset.loaded) return;
+  box.innerHTML = "載入中…";
+
+  const { data, error } = await sb.from("jobs")
+    .select("description,detail,enc_id,job_address,employee_count")
+    .eq("job_no", jobNo).single();
+  if (error) { box.innerHTML = "讀取失敗：" + esc(error.message); return; }
+
+  const d = data.detail || {};
+  const cond = d.condition || {};
+  const welfare = d.welfare || {};
+  const jd = d.jobDetail || {};
+  const parts = [];
+
+  if (data.description) parts.push(`<h3>工作內容</h3>${esc(data.description)}`);
+
+  const req = [];
+  if (cond.workExp) req.push("經驗　" + esc(cond.workExp));
+  if (cond.edu) req.push("學歷　" + esc(cond.edu));
+  if (cond.major?.length) req.push("科系　" + esc(cond.major.join("、")));
+  if (cond.language?.length)
+    req.push("語言　" + esc(cond.language.map(l => l.language + " " + (l.ability || "")).join("、")));
+  if (req.length) parts.push(`<h3>條件要求</h3>${req.join("\n")}`);
+
+  const skills = (cond.specialty || cond.skill || []).map(s => s.description || s).filter(Boolean);
+  if (skills.length)
+    parts.push(`<h3>技能</h3><div class="tag-list">${
+      skills.map(s => `<span class="chip">${esc(s)}</span>`).join("")}</div>`);
+
+  if (jd.salary) parts.push(`<h3>薪資</h3>${esc(jd.salary)}`);
+  if (data.job_address) parts.push(`<h3>地址</h3>${esc(data.job_address)}`);
+
+  const tags = welfare.tag || [];
+  if (tags.length)
+    parts.push(`<h3>福利</h3><div class="tag-list">${
+      tags.slice(0, 24).map(t => `<span class="chip">${esc(t)}</span>`).join("")}</div>`);
+  if (welfare.welfare) parts.push(`<h3>福利說明</h3>${esc(welfare.welfare)}`);
+
+  if (!parts.length) parts.push("這筆職缺的詳情還沒抓到（回填仍在進行）。");
+  parts.push(`<h3>原始頁面</h3><a href="https://www.104.com.tw/job/${esc(data.enc_id)}" target="_blank" rel="noopener">在 104 開啟 →</a>`);
+
+  box.innerHTML = parts.join("\n");
+  box.dataset.loaded = "1";
+}
+
+async function blockCompany(card) {
+  const custNo = card.dataset.cust;
+  const name = card.querySelector(".co").textContent.split(" · ")[0];
+  if (!custNo || custNo === "null") return toast("這筆職缺沒有公司編號");
+  if (!confirm(`不再顯示「${name}」的所有職缺？\n可以到 Supabase 的 blocked_companies 表移除。`)) return;
+  const { error } = await sb.from("blocked_companies")
+    .upsert({ cust_no: custNo, cust_name: name });
+  if (error) return toast("失敗：" + error.message);
+  toast("已封鎖 " + name);
+  reload();
+}
+
+/* ---------------- 統計 ---------------- */
+async function loadStats() {
+  const count = async fn => (await fn.select("*", { count: "exact", head: true })).count ?? 0;
+  const base = () => sb.from("v_job_list").eq("is_open", true);
+
+  const [open, today, week, interested, applied] = await Promise.all([
+    count(base()),
+    count(base().eq("first_seen", todayISO()).is("canonical_job_no", null)),
+    count(base().gte("first_seen", daysAgoISO(7)).is("canonical_job_no", null)),
+    count(base().eq("mark_status", "interested")),
+    count(base().eq("mark_status", "applied")),
+  ]);
+
+  $("#stats").textContent = `在架 ${open.toLocaleString()} 筆`;
+  $("#n-new").textContent = today ? ` ${today}` : "";
+  $("#n-week").textContent = week ? ` ${week}` : "";
+  $("#n-interested").textContent = interested ? ` ${interested}` : "";
+  $("#n-applied").textContent = applied ? ` ${applied}` : "";
+}
+
+/* ---------------- 事件 ---------------- */
+$("#tabs").addEventListener("click", e => {
+  const tab = e.target.closest(".tab");
+  if (!tab) return;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("on"));
+  tab.classList.add("on");
+  state.tab = tab.dataset.tab;
+  reload();
+});
+
+let debounce;
+$("#q").addEventListener("input", () => {
+  clearTimeout(debounce);
+  debounce = setTimeout(reload, 350);
+});
+["#area", "#exp", "#sort"].forEach(sel => $(sel).addEventListener("change", reload));
+$("#refresh").addEventListener("click", () => { loadStats(); reload(); });
+
+/* ---------------- 啟動 ---------------- */
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data.session) showApp();
+})();
+</script>
+</body>
+</html>
