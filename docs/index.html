@@ -44,6 +44,10 @@
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* hidden 屬性靠的是瀏覽器預設的 display:none，任何 id 或 class 選擇器設了
+   display 都會蓋過它。#login 用了 display:grid，沒有這行的話登入成功後
+   畫面不會切換，登入框會一直蓋在職缺清單上面。 */
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg); color: var(--text);
@@ -243,8 +247,24 @@ main { padding: 0 14px 40px; }
 const SUPABASE_URL = "https://khrvjfodjkbhemfuqtas.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_2cyJTChid4LCxjKmy-ZqVQ_uz6En_1g";
 
+// 函式庫沒載進來的話，下面整段 script 會在建立 client 時中斷，
+// 按鈕的事件不會被綁上，畫面看起來就是「按了沒反應」。寧可明講。
+if (typeof supabase === "undefined") {
+  document.body.innerHTML =
+    '<p style="padding:60px 24px;text-align:center;color:#888">' +
+    '無法載入 Supabase 函式庫。<br>請檢查網路連線後重新整理。</p>';
+  throw new Error("supabase-js 載入失敗");
+}
+
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const PAGE = 25;
+
+// 沒有這段的話，非同步流程裡的錯誤會靜靜消失在 console，
+// 使用者只會看到畫面卡住而沒有任何線索。
+window.addEventListener("unhandledrejection", e => {
+  console.error(e.reason);
+  toast("發生錯誤：" + (e.reason?.message || e.reason));
+});
 
 const $ = s => document.querySelector(s);
 const state = { tab: "new", offset: 0, done: false, loading: false, open: new Set() };
@@ -275,12 +295,17 @@ $("#login-form").addEventListener("submit", async e => {
   const btn = e.target.querySelector("button");
   btn.disabled = true;
   $("#login-msg").textContent = "";
-  const { error } = await sb.auth.signInWithPassword({
-    email: $("#email").value.trim(), password: $("#password").value,
-  });
-  btn.disabled = false;
-  if (error) { $("#login-msg").textContent = error.message; return; }
-  showApp();
+  try {
+    const { error } = await sb.auth.signInWithPassword({
+      email: $("#email").value.trim(), password: $("#password").value,
+    });
+    if (error) { $("#login-msg").textContent = error.message; return; }
+    await showApp();
+  } catch (err) {
+    $("#login-msg").textContent = "登入時發生錯誤：" + (err.message || err);
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 $("#logout").addEventListener("click", async () => {
@@ -291,7 +316,13 @@ $("#logout").addEventListener("click", async () => {
 async function showApp() {
   $("#login").hidden = true;
   $("#app").hidden = false;
-  await Promise.all([loadStats(), reload()]);
+  try {
+    await Promise.all([loadStats(), reload()]);
+  } catch (e) {
+    $("#list").innerHTML =
+      `<p class="empty">載入失敗：${esc(e.message || e)}<br>` +
+      `<small>資料表或 view 可能還沒建立</small></p>`;
+  }
 }
 
 /* ---------------- 查詢 ---------------- */
@@ -503,22 +534,29 @@ async function blockCompany(card) {
 
 /* ---------------- 統計 ---------------- */
 async function loadStats() {
-  const count = async fn => (await fn.select("*", { count: "exact", head: true })).count ?? 0;
-  const base = () => sb.from("v_job_list").eq("is_open", true);
+  // 注意：.from() 回傳的 builder 必須先 .select() 才能接條件，
+  // 直接 .from(x).eq(...) 會拋 TypeError。
+  const q = () => sb.from("v_job_list")
+    .select("*", { count: "exact", head: true }).eq("is_open", true);
 
-  const [open, today, week, interested, applied] = await Promise.all([
-    count(base()),
-    count(base().eq("first_seen", todayISO()).is("canonical_job_no", null)),
-    count(base().gte("first_seen", daysAgoISO(7)).is("canonical_job_no", null)),
-    count(base().eq("mark_status", "interested")),
-    count(base().eq("mark_status", "applied")),
-  ]);
-
-  $("#stats").textContent = `在架 ${open.toLocaleString()} 筆`;
-  $("#n-new").textContent = today ? ` ${today}` : "";
-  $("#n-week").textContent = week ? ` ${week}` : "";
-  $("#n-interested").textContent = interested ? ` ${interested}` : "";
-  $("#n-applied").textContent = applied ? ` ${applied}` : "";
+  // 統計失敗不該連帶讓職缺清單消失，所以自己吞掉錯誤。
+  try {
+    const [open, today, week, interested, applied] = await Promise.all([
+      q(),
+      q().eq("first_seen", todayISO()).is("canonical_job_no", null),
+      q().gte("first_seen", daysAgoISO(7)).is("canonical_job_no", null),
+      q().eq("mark_status", "interested"),
+      q().eq("mark_status", "applied"),
+    ]);
+    $("#stats").textContent = `在架 ${(open.count ?? 0).toLocaleString()} 筆`;
+    $("#n-new").textContent = today.count ? ` ${today.count}` : "";
+    $("#n-week").textContent = week.count ? ` ${week.count}` : "";
+    $("#n-interested").textContent = interested.count ? ` ${interested.count}` : "";
+    $("#n-applied").textContent = applied.count ? ` ${applied.count}` : "";
+  } catch (e) {
+    console.error("loadStats", e);
+    $("#stats").textContent = "統計載入失敗";
+  }
 }
 
 /* ---------------- 事件 ---------------- */
