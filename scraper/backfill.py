@@ -14,6 +14,8 @@ if hasattr(sys.stdout, "reconfigure"):
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s",
                     datefmt="%H:%M:%S")
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("hpack").setLevel(logging.WARNING)
 
 from .client import Client, BlockedError, FetchError   # noqa: E402
 from .parse import parse_detail                        # noqa: E402

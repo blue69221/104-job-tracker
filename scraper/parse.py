@@ -24,11 +24,16 @@ def make_dedupe_key(cust_no, job_name, addr_no) -> str:
 
 
 def _parse_yyyymmdd(v):
+    """回傳 ISO 日期字串而非 date 物件。
+
+    寫入 Supabase 是走 JSON，date 物件不能序列化；整條管線統一用字串，
+    跟 first_seen / last_seen 的型別一致。
+    """
     if not v:
         return None
     s = str(v)
     try:
-        return datetime.strptime(s, "%Y%m%d").date()
+        return datetime.strptime(s, "%Y%m%d").date().isoformat()
     except ValueError:
         return None
 

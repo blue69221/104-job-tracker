@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """事件判定的回歸測試。這些情境錯了會造成不可逆的資料損壞。"""
+import json
 import unittest
 from datetime import date
 
 from scraper.diff import classify
-from scraper.parse import normalize_title, make_dedupe_key
+from scraper.parse import normalize_title, make_dedupe_key, parse_list_job
 
 TODAY = date(2026, 9, 7)
 
@@ -109,6 +110,55 @@ class TestNormalizeTitle(unittest.TestCase):
         self.assertNotEqual(a, make_dedupe_key("999", "硬體工程師", "6001006001"))
         self.assertNotEqual(a, make_dedupe_key("123", "韌體工程師", "6001006001"))
         self.assertNotEqual(a, make_dedupe_key("123", "硬體工程師", "6001006002"))
+
+
+class TestParseListJob(unittest.TestCase):
+    """列表解析。重點是輸出必須能直接丟進 Supabase。"""
+
+    RAW = {
+        "jobNo": "7790778",
+        "jobName": "半導體設備工程師【年薪16個月】",
+        "custNo": "13068501000",
+        "custName": "測試半導體股份有限公司",
+        "coIndustryDesc": "其他半導體相關業",
+        "jobAddrNo": 6001006001,
+        "jobAddrNoDesc": "新竹市",
+        "jobAddress": "香山區香北路21號",
+        "appearDate": "20260903",
+        "applyCnt": 3,
+        "salaryLow": 0,
+        "salaryHigh": 0,
+        "employeeCount": 70,
+        "jobCat": [2008001005, 2009002007],
+        "description": "工作內容...",
+        "link": {"job": "https://www.104.com.tw/job/4mzei"},
+    }
+
+    def test_output_is_json_serializable(self):
+        """寫入 Supabase 走 JSON。任何 date/datetime 物件都會在這裡爆掉。"""
+        row = parse_list_job(self.RAW, TODAY)
+        json.dumps(row)          # 不可拋例外
+
+    def test_enc_id_extracted_from_link(self):
+        """詳情頁只認網址短碼，用 jobNo 會 404。"""
+        row = parse_list_job(self.RAW, TODAY)
+        self.assertEqual(row["enc_id"], "4mzei")
+        self.assertNotEqual(row["enc_id"], row["job_no"])
+
+    def test_dates_are_iso_strings(self):
+        row = parse_list_job(self.RAW, TODAY)
+        self.assertEqual(row["appear_date"], "2026-09-03")
+        self.assertEqual(row["last_seen"], "2026-09-07")
+        self.assertIsInstance(row["appear_date"], str)
+
+    def test_missing_appear_date_is_none(self):
+        raw = dict(self.RAW)
+        raw["appearDate"] = None
+        self.assertIsNone(parse_list_job(raw, TODAY)["appear_date"])
+
+    def test_job_cats_are_strings(self):
+        row = parse_list_job(self.RAW, TODAY)
+        self.assertEqual(row["job_cats"], ["2008001005", "2009002007"])
 
 
 if __name__ == "__main__":

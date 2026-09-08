@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
 """集中所有常數與環境變數。改行為請動這裡，不要散在各處。"""
 import os
+from pathlib import Path
+
+# 本機執行時從專案根目錄的 .env 載入；GitHub Actions 上沒有這個檔案，
+# 環境變數由 repo Secrets 直接注入，load_dotenv 找不到檔案也不會出錯。
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:      # 未安裝 python-dotenv 時退回純環境變數
+    pass
 
 # --- 104 API ---
 SEARCH_URL = "https://www.104.com.tw/jobs/search/api/jobs"

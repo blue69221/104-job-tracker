@@ -19,6 +19,10 @@ if hasattr(sys.stdout, "reconfigure"):
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(message)s",
                     datefmt="%H:%M:%S")
+# httpx 對每一次 Supabase 請求都會印一行完整網址，全量執行會有上千行，
+# 把真正該看的訊息淹掉。
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("hpack").setLevel(logging.WARNING)
 
 from . import notify                                    # noqa: E402
 from .client import Client, BlockedError, FetchError    # noqa: E402
