@@ -4,7 +4,7 @@ import json
 import unittest
 from datetime import date
 
-from scraper.diff import classify
+from scraper.diff import classify, assert_uniform_columns
 from scraper.parse import normalize_title, make_dedupe_key, parse_list_job
 
 TODAY = date(2026, 9, 7)
@@ -26,6 +26,14 @@ def existing_row(job_no, first_seen="2026-01-01", **kw):
     row = {"job_no": job_no, "first_seen": first_seen,
            "job_name": "硬體研發工程師", "salary_low": 0, "salary_high": 0,
            "apply_cnt": 0, "appear_date": None,
+           "dedupe_key": None, "canonical_job_no": None}
+    row.update(kw)
+    return row
+
+
+def known_row(job_no, first_seen="2025-01-01", **kw):
+    """資料庫裡存在但已下架的職缺（lookup_jobs 的回傳形狀）。"""
+    row = {"job_no": job_no, "first_seen": first_seen, "is_open": False,
            "dedupe_key": None, "canonical_job_no": None}
     row.update(kw)
     return row
@@ -53,15 +61,56 @@ class TestClassify(unittest.TestCase):
         self.assertEqual(r.new_rows[0]["canonical_job_no"], "OLD")
 
     def test_reopened_job_keeps_original_first_seen(self):
-        """回鍋職缺絕不能帶 first_seen，否則會覆蓋掉原始日期。"""
+        """回鍋職缺必須寫回資料庫裡原本的 first_seen，不能變成今天。"""
         seen = {"A": job("A")}
-        known = {"A": {"job_no": "A", "first_seen": "2025-03-01", "is_open": False}}
+        known = {"A": known_row("A", first_seen="2025-03-01")}
         r = classify(seen, {}, known, {}, TODAY, complete=True)
 
         self.assertEqual(r.reopened, {"A"})
         self.assertEqual(r.new_rows, [])
-        self.assertNotIn("first_seen", r.update_rows[0])
+        self.assertEqual(r.update_rows[0]["first_seen"], "2025-03-01")
         self.assertEqual([e["event_type"] for e in r.events], ["reopened"])
+
+    def test_every_row_carries_first_seen(self):
+        """upsert 是 INSERT ... ON CONFLICT。任何一列缺 first_seen，
+        只要它在資料庫不存在就會違反 NOT NULL，讓整批寫入失敗。"""
+        existing = {"A": existing_row("A", first_seen="2026-01-01")}
+        known = {"B": known_row("B", first_seen="2025-05-05")}
+        seen = {"A": job("A"), "B": job("B"), "C": job("C")}
+        r = classify(seen, existing, known, {}, TODAY, complete=True)
+
+        self.assertEqual(len(r.new_rows) + len(r.update_rows), 3)
+        for row in r.new_rows + r.update_rows:
+            self.assertIsNotNone(row.get("first_seen"), row["job_no"])
+        by_no = {x["job_no"]: x for x in r.new_rows + r.update_rows}
+        self.assertEqual(by_no["A"]["first_seen"], "2026-01-01")   # 既有，保留
+        self.assertEqual(by_no["B"]["first_seen"], "2025-05-05")   # 回鍋，保留
+        self.assertEqual(by_no["C"]["first_seen"], "2026-09-07")   # 全新，今天
+
+    def test_batches_have_uniform_columns(self):
+        """同批 upsert 欄位集合不一致時，只出現在部分列的欄位會靜默寫不進去
+        —— 例如只有重刊才有的 canonical_job_no。"""
+        existing = {"A": existing_row("A")}
+        known = {"B": known_row("B")}
+        relist = job("D", cust="777")
+        seen = {"A": job("A"), "B": job("B"), "C": job("C"), "D": relist}
+        r = classify(seen, existing, known,
+                     {relist["dedupe_key"]: "OLD"}, TODAY, complete=True)
+
+        self.assertEqual(r.relisted, {"D"})
+        assert_uniform_columns(r.new_rows, "new_rows")
+        assert_uniform_columns(r.update_rows, "update_rows")
+
+    def test_relisted_row_carries_canonical_pointer(self):
+        relist = job("NEW")
+        r = classify({"NEW": relist}, {}, {},
+                     {relist["dedupe_key"]: "OLD"}, TODAY, complete=True)
+        self.assertEqual(r.new_rows[0]["canonical_job_no"], "OLD")
+
+    def test_plain_new_row_has_explicit_null_canonical(self):
+        r = classify({"A": job("A")}, {}, {}, {}, TODAY, complete=True)
+        self.assertIn("canonical_job_no", r.new_rows[0])
+        self.assertIsNone(r.new_rows[0]["canonical_job_no"])
 
     def test_incomplete_scan_never_closes_anything(self):
         """掃描不完整時判定下架，會產生上千筆假的 closed 事件。"""

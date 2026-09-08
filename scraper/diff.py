@@ -5,6 +5,17 @@
   - 把回鍋職缺當成新職缺 -> first_seen 被覆蓋，歷史永久損毀
   - 掃描不完整還判定下架 -> 一次網路抖動產生上千筆假的 closed 事件
 所以獨立成純函式，不碰網路也不碰資料庫，可以直接測試。
+
+另外兩件跟 Supabase 寫入方式有關、不是邏輯但一樣會炸的事：
+
+1. upsert 是 INSERT ... ON CONFLICT。只要有一筆在資料庫不存在就會走 INSERT，
+   缺 NOT NULL 欄位會讓整批失敗。所以每一列都必須帶 first_seen ——
+   要更新的列帶的是「從資料庫查回來的原值」，寫回去等於沒變，
+   但不再需要仰賴「分類一定正確」這個假設。
+
+2. 同一批 upsert 的欄位集合必須一致，否則只在部分列出現的欄位
+   （例如只有重刊才有的 canonical_job_no）可能整批被忽略，
+   摺疊結果就靜默地寫不進去。所以每一列都明確給定，沒有就填 None。
 """
 from dataclasses import dataclass, field
 
@@ -13,8 +24,8 @@ from .parse import changed_fields
 
 @dataclass
 class Classification:
-    new_rows: list = field(default_factory=list)      # 要 INSERT（含 first_seen）
-    update_rows: list = field(default_factory=list)   # 要 UPDATE（不含 first_seen）
+    new_rows: list = field(default_factory=list)      # 首次出現，first_seen = 今天
+    update_rows: list = field(default_factory=list)   # 已存在，first_seen = 原值
     events: list = field(default_factory=list)
     discovered: set = field(default_factory=set)      # 真正的新職缺，進推播
     relisted: set = field(default_factory=set)        # 重刊，不進推播
@@ -36,8 +47,12 @@ def classify(seen, existing, known, dedupe_map, today, complete):
 
     for job_no in sorted(candidates):
         row = dict(seen[job_no])
-        if job_no in known:
-            # 回鍋：資料庫已有這筆，刻意不寫 first_seen 以保住原始日期
+        prior = known.get(job_no)
+
+        if prior:
+            # 回鍋：資料庫已有這筆，寫回它原本的 first_seen 而不是今天
+            row["first_seen"] = prior.get("first_seen") or iso
+            row["canonical_job_no"] = prior.get("canonical_job_no")
             r.reopened.add(job_no)
             r.update_rows.append(row)
             r.events.append({"job_no": job_no, "event_type": "reopened",
@@ -53,6 +68,7 @@ def classify(seen, existing, known, dedupe_map, today, complete):
                              "event_date": iso,
                              "payload": {"canonical_job_no": canonical}})
         else:
+            row["canonical_job_no"] = None
             r.discovered.add(job_no)
             r.events.append({"job_no": job_no, "event_type": "discovered",
                              "event_date": iso})
@@ -61,8 +77,13 @@ def classify(seen, existing, known, dedupe_map, today, complete):
     for job_no, parsed in seen.items():
         if job_no in candidates:
             continue
-        r.update_rows.append(dict(parsed))
-        diff = changed_fields(existing[job_no], parsed)
+        prior = existing[job_no]
+        row = dict(parsed)
+        row["first_seen"] = prior.get("first_seen") or iso
+        row["canonical_job_no"] = prior.get("canonical_job_no")
+        r.update_rows.append(row)
+
+        diff = changed_fields(prior, parsed)
         if diff:
             r.events.append({"job_no": job_no, "event_type": "changed",
                              "event_date": iso, "payload": diff})
@@ -73,3 +94,17 @@ def classify(seen, existing, known, dedupe_map, today, complete):
                         for j in r.closed)
 
     return r
+
+
+def assert_uniform_columns(rows, label=""):
+    """同一批 upsert 的欄位集合必須一致，不一致就會有欄位靜默寫不進去。"""
+    if not rows:
+        return
+    first = set(rows[0])
+    for i, row in enumerate(rows[1:], 1):
+        if set(row) != first:
+            missing = first - set(row)
+            extra = set(row) - first
+            raise ValueError(
+                f"{label} 第 {i} 列的欄位與第 0 列不一致："
+                f"缺少 {sorted(missing)}，多出 {sorted(extra)}")

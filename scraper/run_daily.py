@@ -26,7 +26,7 @@ logging.getLogger("hpack").setLevel(logging.WARNING)
 
 from . import notify                                    # noqa: E402
 from .client import Client, BlockedError, FetchError    # noqa: E402
-from .diff import classify                              # noqa: E402
+from .diff import classify, assert_uniform_columns      # noqa: E402
 from .planner import build_plan, plan_summary           # noqa: E402
 from .parse import parse_list_job, parse_detail         # noqa: E402
 from .store import Store                                # noqa: E402
@@ -148,8 +148,10 @@ def main():
 
         # ---- 4. 寫入（new 與 update 欄位集合不同，必須分批）----
         if result.new_rows:
+            assert_uniform_columns(result.new_rows, "new_rows")
             store.upsert_jobs(result.new_rows)
         if result.update_rows:
+            assert_uniform_columns(result.update_rows, "update_rows")
             store.upsert_jobs(result.update_rows)
         if result.closed:
             store.mark_closed(result.closed, today)
