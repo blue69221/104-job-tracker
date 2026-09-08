@@ -102,6 +102,39 @@ python -m scraper.run_daily --no-notify --detail-budget 0
 - `2009002000` 製程規劃類人員（半導體製程／設備工程師）
 - `2009003000` 品保／品管類人員（硬體測試、IC 封測、EMC）
 
+## 手機網頁
+
+**https://blue69221.github.io/104-job-tracker/**
+
+單一 HTML 檔（`docs/index.html`），走 GitHub Pages，無建置流程。
+以 Supabase Authentication 的帳號登入，資料透過 `v_job_list` 檢視表查詢。
+
+前端帶的是 **anon（publishable）金鑰**，那是公開金鑰，出現在原始碼是設計如此。
+保護來自 RLS：未登入者對任何一張表或 view 都沒有 policy，一列都讀不到。
+**改動 `sql/views.sql` 時務必保留 `security_invoker = true`**，否則 view 會以
+建立者權限執行，等於在 RLS 上開一個後門。
+
+修改前端後推上 main 即自動部署，約一分鐘生效。
+
+## 維運
+
+| 狀況 | 處理 |
+|---|---|
+| 收到「爬蟲失敗」的 Telegram | 看 `runs` 表的 `error` 欄位，或 Actions 的 log |
+| 錯誤是 HTTP 429 | 暫時性限流，會自動退避重試；連續失敗就隔一段時間重跑 |
+| 錯誤是 HTTP 403 | IP 被封鎖，考慮把爬蟲改跑在家用網路 |
+| 連續幾天沒收到任何 Telegram | 排程可能被停用，檢查 Actions 頁面與 `state/heartbeat.txt` |
+| 想補完歷史職缺的詳情 | 手動觸發 `backfill-details`，每次 1,500 筆 |
+| 想改抓取範圍 | 改 `scraper/config.py` 的 `JOBCAT_GROUPS`，先跑 `show_plan` 確認沒有查詢會被截斷 |
+
+診斷指令：
+
+```bash
+python -m scraper.check_setup   # 金鑰、資料表、RLS、Telegram 全部驗一次
+python -m scraper.show_data     # 看資料庫現況與最近幾次執行
+python -m scraper.show_plan     # 看查詢計畫，確認覆蓋率
+```
+
 ## 已知限制
 
 - 「哪一天沒跑」在事件式儲存下無法與「那天沒有變化」區分。`runs` 表可以還原執行歷史。
