@@ -10,7 +10,9 @@ from . import config as C
 log = logging.getLogger(__name__)
 
 PAGE = 1000       # Supabase 單次 select 的列數上限
-BATCH = 500       # 寫入批次大小
+# 寫入批次。Supabase 對單一語句有執行時間上限，批次太大會整批被取消
+# （2026-09-08 實測 500 筆會超時）。寧可多送幾次請求也不要整批失敗。
+BATCH = 200
 
 
 class Store:

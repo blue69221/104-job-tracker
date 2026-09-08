@@ -112,6 +112,28 @@ class TestClassify(unittest.TestCase):
         self.assertIn("canonical_job_no", r.new_rows[0])
         self.assertIsNone(r.new_rows[0]["canonical_job_no"])
 
+    def test_update_rows_drop_heavy_fields(self):
+        """每天要更新上萬筆在架職缺。把 list_snapshot 與 description 一起重寫，
+        單次 upsert 會超過 Supabase 的 statement timeout 而整批失敗。
+        這兩個欄位只在首次出現時寫入，之後不再變動。"""
+        heavy = {"list_snapshot": {"blob": "x" * 4000}, "description": "y" * 2000}
+        existing = {"A": existing_row("A")}
+        known = {"B": known_row("B")}
+        seen = {"A": job("A", **heavy), "B": job("B", **heavy), "C": job("C", **heavy)}
+        r = classify(seen, existing, known, {}, TODAY, complete=True)
+
+        self.assertEqual(len(r.update_rows), 2)          # A 既有、B 回鍋
+        for row in r.update_rows:
+            self.assertNotIn("list_snapshot", row)
+            self.assertNotIn("description", row)
+            self.assertIn("last_seen", row)              # 該更新的仍在
+            self.assertIn("apply_cnt", row)
+
+        # 新職缺必須完整保存，那是唯一一次能存下原始快照的機會
+        self.assertEqual(len(r.new_rows), 1)
+        self.assertIn("list_snapshot", r.new_rows[0])
+        self.assertIn("description", r.new_rows[0])
+
     def test_incomplete_scan_never_closes_anything(self):
         """掃描不完整時判定下架，會產生上千筆假的 closed 事件。"""
         existing = {"A": existing_row("A"), "B": existing_row("B")}

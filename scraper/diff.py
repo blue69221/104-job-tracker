@@ -21,6 +21,20 @@ from dataclasses import dataclass, field
 
 from .parse import changed_fields
 
+# 每天要更新的在架職缺上萬筆。把這兩個大欄位一起重寫，單次 upsert 會
+# 推進去好幾 MB，超過 Supabase 的 statement timeout 而整批失敗
+# （2026-09-08 實測：11,714 筆時 error 57014）。
+#
+# 它們只在職缺首次出現時寫入，之後不再更新：list_snapshot 是當初的
+# 原始回應快照，description 是 JD 內文——而 JD 的變更本來就不在追蹤
+# 範圍內，因為詳情頁只抓一次（見 README 的設計說明）。
+HEAVY_FIELDS = ("list_snapshot", "description")
+
+
+def _light(row):
+    """要更新的列不重寫大欄位，只帶會變動的部分。"""
+    return {k: v for k, v in row.items() if k not in HEAVY_FIELDS}
+
 
 @dataclass
 class Classification:
@@ -54,7 +68,7 @@ def classify(seen, existing, known, dedupe_map, today, complete):
             row["first_seen"] = prior.get("first_seen") or iso
             row["canonical_job_no"] = prior.get("canonical_job_no")
             r.reopened.add(job_no)
-            r.update_rows.append(row)
+            r.update_rows.append(_light(row))
             r.events.append({"job_no": job_no, "event_type": "reopened",
                              "event_date": iso})
             continue
@@ -81,7 +95,7 @@ def classify(seen, existing, known, dedupe_map, today, complete):
         row = dict(parsed)
         row["first_seen"] = prior.get("first_seen") or iso
         row["canonical_job_no"] = prior.get("canonical_job_no")
-        r.update_rows.append(row)
+        r.update_rows.append(_light(row))
 
         diff = changed_fields(prior, parsed)
         if diff:
