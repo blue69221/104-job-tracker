@@ -2,7 +2,7 @@
 """事件判定的回歸測試。這些情境錯了會造成不可逆的資料損壞。"""
 import json
 import unittest
-from datetime import date
+from datetime import date, timedelta
 
 from scraper.diff import classify, assert_uniform_columns
 from scraper.parse import normalize_title, make_dedupe_key, parse_list_job
@@ -22,8 +22,10 @@ def job(job_no, name="硬體研發工程師", cust="123", addr="6001006001", **k
     return row
 
 
-def existing_row(job_no, first_seen="2026-01-01", **kw):
+def existing_row(job_no, first_seen="2026-01-01", last_seen=None, **kw):
+    """資料庫裡的在架職缺。last_seen 預設為今天（代表剛掃到）。"""
     row = {"job_no": job_no, "first_seen": first_seen,
+           "last_seen": last_seen or TODAY.isoformat(),
            "job_name": "硬體研發工程師", "salary_low": 0, "salary_high": 0,
            "apply_cnt": 0, "appear_date": None,
            "dedupe_key": None, "canonical_job_no": None}
@@ -141,10 +143,35 @@ class TestClassify(unittest.TestCase):
         self.assertEqual(r.closed, [])
         self.assertNotIn("closed", [e["event_type"] for e in r.events])
 
-    def test_complete_scan_closes_missing_jobs(self):
-        existing = {"A": existing_row("A"), "B": existing_row("B")}
+    def test_complete_scan_closes_long_missing_jobs(self):
+        stale = (TODAY - timedelta(days=3)).isoformat()
+        existing = {"A": existing_row("A"),
+                    "B": existing_row("B", last_seen=stale)}
         r = classify({"A": job("A")}, existing, {}, {}, TODAY, complete=True)
         self.assertEqual(r.closed, ["B"])
+
+    def test_single_missed_scan_does_not_close(self):
+        """完整掃描要翻一千多頁、歷時近半小時，期間排序會變動而漏掃。
+        單次沒看到就判定下架，每天會產生數百筆假下架與隔天的假回鍋。"""
+        yesterday = (TODAY - timedelta(days=1)).isoformat()
+        older = (TODAY - timedelta(days=2)).isoformat()
+        existing = {
+            "MISSED_ONCE": existing_row("MISSED_ONCE", last_seen=yesterday),
+            "REALLY_GONE": existing_row("REALLY_GONE", last_seen=older),
+        }
+        r = classify({}, existing, {}, {}, TODAY, complete=True)
+        self.assertEqual(r.closed, ["REALLY_GONE"])
+        self.assertNotIn("MISSED_ONCE", r.closed)
+
+    def test_grace_period_is_configurable(self):
+        older = (TODAY - timedelta(days=2)).isoformat()
+        existing = {"X": existing_row("X", last_seen=older)}
+        self.assertEqual(
+            classify({}, existing, {}, {}, TODAY, True, close_grace_days=0).closed,
+            ["X"])
+        self.assertEqual(
+            classify({}, existing, {}, {}, TODAY, True, close_grace_days=5).closed,
+            [])
 
     def test_changed_fields_emit_changed_event(self):
         existing = {"A": existing_row("A", salary_low=40000, apply_cnt=3)}

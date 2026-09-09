@@ -58,6 +58,15 @@ BACKFILL_MAX_JOBS = int(os.getenv("BACKFILL_MAX_JOBS", "1500"))
 # --- 業務規則 ---
 RELIST_WINDOW_DAYS = 60   # 重刊摺疊的回溯窗（第 8 題）
 
+# 下架判定的緩衝天數。0 = 今天沒看到就算下架。
+#
+# 為什麼需要緩衝（2026-09-09 實測）：完整掃描要翻 1,370 頁、歷時 27 分鐘，
+# 期間不斷有公司刷新職缺把自己推到排序前面，後面的職缺就往後擠而被跳過。
+# 結果是每天約 400 筆被誤判下架、隔天又「回鍋」，事件流充滿雜訊，
+# 「這個職缺掛了多久」也跟著失準。
+# 設 1 表示連續兩次掃描都沒看到才算下架。
+CLOSE_GRACE_DAYS = int(os.getenv("CLOSE_GRACE_DAYS", "1"))
+
 # --- 外部服務 ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")

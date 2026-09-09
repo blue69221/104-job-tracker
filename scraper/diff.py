@@ -18,7 +18,9 @@
    摺疊結果就靜默地寫不進去。所以每一列都明確給定，沒有就填 None。
 """
 from dataclasses import dataclass, field
+from datetime import timedelta
 
+from . import config as C
 from .parse import changed_fields
 
 # 每天要更新的在架職缺上萬筆。把這兩個大欄位一起重寫，單次 upsert 會
@@ -47,7 +49,8 @@ class Classification:
     closed: list = field(default_factory=list)
 
 
-def classify(seen, existing, known, dedupe_map, today, complete):
+def classify(seen, existing, known, dedupe_map, today, complete,
+             close_grace_days=None):
     """
     seen        {job_no: 今天解析出的欄位}
     existing    {job_no: 資料庫裡在架職缺的比對欄位}
@@ -103,7 +106,13 @@ def classify(seen, existing, known, dedupe_map, today, complete):
                              "event_date": iso, "payload": diff})
 
     if complete:
-        r.closed = sorted(j for j in existing if j not in seen)
+        # 翻頁期間資料集會變動，單次沒掃到不代表真的下架。要求連續多次
+        # 沒看到才判定，否則每天會產生數百筆假下架與隔天的假回鍋。
+        grace = C.CLOSE_GRACE_DAYS if close_grace_days is None else close_grace_days
+        cutoff = (today - timedelta(days=grace)).isoformat()
+        r.closed = sorted(
+            job_no for job_no, prior in existing.items()
+            if job_no not in seen and (prior.get("last_seen") or "") < cutoff)
         r.events.extend({"job_no": j, "event_type": "closed", "event_date": iso}
                         for j in r.closed)
 

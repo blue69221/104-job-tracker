@@ -88,8 +88,9 @@ class Store:
     @retry_db
     def load_open_jobs(self):
         """載入所有在架職缺的比對用欄位。回傳 {job_no: row}。"""
-        cols = ("job_no,dedupe_key,first_seen,job_name,salary_low,salary_high,"
-                "apply_cnt,appear_date,canonical_job_no,detail_fetched_at")
+        cols = ("job_no,dedupe_key,first_seen,last_seen,job_name,salary_low,"
+                "salary_high,apply_cnt,appear_date,canonical_job_no,"
+                "detail_fetched_at")
         out, start = {}, 0
         while True:
             r = (self.sb.table("jobs").select(cols)
