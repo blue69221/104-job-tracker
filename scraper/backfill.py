@@ -65,18 +65,25 @@ def main():
                     continue
                 try:
                     payload = client.detail(enc_id)
-                except FetchError as e:
-                    log.warning("失敗 %s: %s", row["job_no"], e)
+                    if not payload:
+                        # 404：職缺已移除。標記時間戳避免無限重試。
+                        store.save_detail(row["job_no"],
+                                          {"detail_fetched_at": "now()"})
+                        continue
+                    fields = parse_detail(payload)
+                    fields["detail_fetched_at"] = "now()"
+                    store.save_detail(row["job_no"], fields)
+                    done += 1
+                except BlockedError:
+                    raise               # 被 104 擋下要中止並告警
+                except Exception as e:  # noqa: BLE001
+                    # 單筆失敗（含資料庫連線重試用盡）不該中斷整輪回填，
+                    # 已補的部分都是有效的。
                     failed += 1
-                    continue
-                if not payload:
-                    # 404：職缺已移除。標記時間戳避免無限重試。
-                    store.save_detail(row["job_no"], {"detail_fetched_at": "now()"})
-                    continue
-                fields = parse_detail(payload)
-                fields["detail_fetched_at"] = "now()"
-                store.save_detail(row["job_no"], fields)
-                done += 1
+                    log.warning("失敗 %s（累計 %s）：%s", row["job_no"], failed, e)
+                    if failed >= 50:
+                        log.error("連續失敗過多，提早結束，重跑一次即可接續")
+                        break
                 if done % 100 == 0:
                     log.info("已補 %s 筆 / 失敗 %s / 剩餘時間 %.0f 分鐘",
                              done, failed, (deadline - time.time()) / 60)

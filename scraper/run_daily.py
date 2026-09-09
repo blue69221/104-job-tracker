@@ -77,26 +77,31 @@ def fetch_details(client, store, targets):
 
 
 def _fetch_details(client, store, targets):
-    done = 0
+    done = failed = 0
     for row in targets:
         enc_id = row.get("enc_id")
         if not enc_id:
             continue
         try:
             payload = client.detail(enc_id)
+            if not payload:
+                # 404：職缺已被移除。仍蓋上時間戳，否則每天都會重試同一筆。
+                store.save_detail(row["job_no"], {"detail_fetched_at": "now()"})
+                continue
+            fields = parse_detail(payload)
+            fields["detail_fetched_at"] = "now()"
+            store.save_detail(row["job_no"], fields)
+            done += 1
         except BlockedError:
-            raise
-        except FetchError as e:
-            log.warning("詳情抓取失敗 %s: %s", row["job_no"], e)
-            continue
-        if not payload:
-            # 404：職缺已被移除。仍蓋上時間戳，否則每天都會重試同一筆。
-            store.save_detail(row["job_no"], {"detail_fetched_at": "now()"})
-            continue
-        fields = parse_detail(payload)
-        fields["detail_fetched_at"] = "now()"
-        store.save_detail(row["job_no"], fields)
-        done += 1
+            raise                       # 被 104 擋下必須往上報並中止
+        except Exception as e:          # noqa: BLE001
+            # 單筆失敗（含資料庫連線重試用盡）不該中斷整個階段。
+            failed += 1
+            log.warning("詳情抓取失敗 %s（累計 %s 筆）：%s",
+                        row["job_no"], failed, e)
+            if failed >= 25:
+                log.error("詳情失敗過多，提早結束本階段，剩下的留給下一輪")
+                break
     return done
 
 
@@ -172,10 +177,19 @@ def main():
             store.insert_events(result.events)
 
         # ---- 5. 詳情（新職缺優先）----
+        # 詳情是補充資料，主線（職缺與事件）到這裡已經全部寫入完成。
+        # 這個階段失敗不該把整輪標記成 failed —— 那會蓋掉「資料其實有寫進去」
+        # 的事實，讓人誤以為當天什麼都沒抓到。
         if args.detail_budget > 0:
-            targets = store.jobs_needing_detail(args.detail_budget)
-            stats["details_fetched"] = fetch_details(client, store, targets)
-            log.info("詳情補抓 %s 筆", stats["details_fetched"])
+            try:
+                targets = store.jobs_needing_detail(args.detail_budget)
+                stats["details_fetched"] = fetch_details(client, store, targets)
+                log.info("詳情補抓 %s 筆", stats["details_fetched"])
+            except BlockedError:
+                raise                   # 被 104 擋下要告警
+            except Exception as e:      # noqa: BLE001
+                log.warning("詳情階段中止（主線資料已寫入）：%s", e)
+                warnings = list(warnings or []) + [f"詳情階段中止: {e}"]
 
         stats["requests"] = client.request_count
         store.finish_run(run_id, "ok", stats, warnings or None)
